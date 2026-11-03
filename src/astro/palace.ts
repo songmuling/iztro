@@ -23,6 +23,7 @@ import {
 } from '../i18n';
 import { fixEarthlyBranchIndex, fixIndex, fixLunarMonthIndex, getAgeIndex } from '../utils';
 import { getConfig } from './astro';
+import { normalizeDayBoundary } from '../utils/date';
 
 /**
  * 获取命宫以及身宫数据
@@ -40,7 +41,8 @@ import { getConfig } from './astro';
  * @returns {SoulAndBody} 命宫和身宫数据
  */
 export const getSoulAndBody = (param: AstrolabeParam): SoulAndBody => {
-  const { solarDate, timeIndex, fixLeap, from } = param;
+  const { fixLeap, from } = param;
+  const { solarDate, timeIndex } = normalizeDayBoundary(param.solarDate, param.timeIndex);
   const { yearly, hourly } = getHeavenlyStemAndEarthlyBranchBySolarDate(solarDate, timeIndex, {
     year: getConfig().yearDivide,
     month: getConfig().horoscopeDivide,
@@ -59,15 +61,11 @@ export const getSoulAndBody = (param: AstrolabeParam): SoulAndBody => {
 
   // 身宫索引，以寅宫为0，顺时针数到生月地支索引，再顺时针数到生时地支索引
   // 与命宫索引一样，不再赘述
-  let bodyIndex = fixIndex(monthIndex + EARTHLY_BRANCHES.indexOf(earthlyBranchOfTime));
+  const bodyIndex = fixIndex(monthIndex + EARTHLY_BRANCHES.indexOf(earthlyBranchOfTime));
 
   if (from?.heavenlyStem && from?.earthlyBranch) {
-    // 以传入地支为命宫
+    // 地盘、人盘以传入地支为命宫，身宫仍按出生月和时辰计算，不随命宫平移。
     soulIndex = fixEarthlyBranchIndex(from.earthlyBranch);
-
-    const bodyOffset = [0, 2, 4, 6, 8, 10, 0, 2, 4, 6, 8, 10, 0];
-
-    bodyIndex = fixIndex(bodyOffset[timeIndex] + soulIndex);
   }
 
   // 用五虎遁取得寅宫的天干
@@ -184,7 +182,8 @@ export const getPalaceNames = (fromIndex: number): PalaceName[] => {
  * @returns 从寅宫开始的大限年龄段
  */
 export const getHoroscope = (param: AstrolabeParam): { decadals: Decadal[]; ages: number[][] } => {
-  const { solarDate, timeIndex, gender, from } = param;
+  const { gender, from } = param;
+  const { solarDate, timeIndex } = normalizeDayBoundary(param.solarDate, param.timeIndex);
   const decadals: Decadal[] = [];
   const genderKey = kot<GenderKey>(gender!);
   const { yearly } = getHeavenlyStemAndEarthlyBranchBySolarDate(solarDate, timeIndex, {
@@ -193,7 +192,7 @@ export const getHoroscope = (param: AstrolabeParam): { decadals: Decadal[]; ages
   });
   const heavenlyStem = kot<HeavenlyStemKey>(yearly[0], 'Heavenly');
   const earthlyBranch = kot<EarthlyBranchKey>(yearly[1], 'Earthly');
-  const { soulIndex, heavenlyStemOfSoul, earthlyBranchOfSoul } = getSoulAndBody(param);
+  const { soulIndex, heavenlyStemOfSoul, earthlyBranchOfSoul } = getSoulAndBody({ ...param, solarDate, timeIndex });
   const fiveElementsClass = kot<FiveElementsClassKey>(
     getFiveElementsClass(from?.heavenlyStem ?? heavenlyStemOfSoul, from?.earthlyBranch ?? earthlyBranchOfSoul),
   );

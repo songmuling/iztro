@@ -31,6 +31,7 @@ import FunctionalStar from '../star/FunctionalStar';
 import { getConfig, resolveConfig, withConfig } from './config';
 import { bindContext } from './context';
 import { validateDate, validateTimeIndex, validateGender, validateBoolean } from '../utils/validation';
+import { normalizeDayBoundary } from '../utils/date';
 
 const _plugins = [] as Plugin[];
 /**
@@ -102,7 +103,7 @@ export function astrolabeBySolarDate<T extends FunctionalAstrolabe>(
 /**
  * 通过阳历获取星盘信息
  *
- * @param solarDate 阳历日期【YYYY-M-D】
+ * @param solarDateStr 阳历日期【YYYY-M-D】
  * @param timeIndex 出生时辰序号【0~12】
  * @param gender 性别【男|女】
  * @param fixLeap 是否调整闰月情况【默认 true】，假入调整闰月，则闰月的前半个月算上个月，后半个月算下个月
@@ -110,30 +111,25 @@ export function astrolabeBySolarDate<T extends FunctionalAstrolabe>(
  * @returns 星盘信息
  */
 export function bySolar<T extends FunctionalAstrolabe>(
-  solarDate: string,
+  solarDateStr: string,
   timeIndex: number,
   gender: GenderName,
   fixLeap: boolean = true,
   language?: Language,
 ): T {
-  validateDate(solarDate);
+  validateDate(solarDateStr);
   validateTimeIndex(timeIndex);
   validateGender(gender);
   validateBoolean(fixLeap, 'fixLeap');
   return withLanguage(language ?? 'zh-CN', () => {
     const palaces: IFunctionalPalace[] = [];
-    const { dayDivide } = getConfig();
-    let tIndex = timeIndex;
+    const { solarDate, timeIndex: tIndex } = normalizeDayBoundary(solarDateStr, timeIndex);
 
-    if (dayDivide === 'current' && tIndex >= 12) {
-      // 如果当前时辰为晚子时并且晚子时算当天时，将时辰调整为当日早子时
-      tIndex = 0;
-    }
-
-    const { yearly } = getHeavenlyStemAndEarthlyBranchBySolarDate(solarDate, tIndex, {
+    const chineseDate = getHeavenlyStemAndEarthlyBranchBySolarDate(solarDate, tIndex, {
       year: getConfig().yearDivide,
       month: getConfig().horoscopeDivide,
     });
+    const { yearly } = chineseDate;
     const earthlyBranchOfYear = kot<EarthlyBranchKey>(yearly[1], 'Earthly');
     const heavenlyStemOfYear = kot<HeavenlyStemKey>(yearly[0], 'Heavenly');
     const { bodyIndex, soulIndex, heavenlyStemOfSoul, earthlyBranchOfSoul } = getSoulAndBody({
@@ -194,10 +190,6 @@ export function bySolar<T extends FunctionalAstrolabe>(
     const earthlyBranchOfSoulPalace = EARTHLY_BRANCHES[fixIndex(soulIndex + 2)];
     const earthlyBranchOfBodyPalace = t<EarthlyBranchName>(EARTHLY_BRANCHES[fixIndex(bodyIndex + 2)]);
 
-    const chineseDate = getHeavenlyStemAndEarthlyBranchBySolarDate(solarDate, tIndex, {
-      year: getConfig().yearDivide,
-      month: getConfig().horoscopeDivide,
-    });
     const lunarDate = solar2lunar(solarDate);
 
     // 中州派地支以年支找命主
@@ -208,13 +200,13 @@ export function bySolar<T extends FunctionalAstrolabe>(
 
     const result = new FunctionalAstrolabe({
       gender: t(kot<GenderName>(gender)),
-      solarDate,
+      solarDate: solarDateStr,
       lunarDate: formatLunarDate(lunarDate),
       chineseDate: translateChineseDate(chineseDate),
       rawDates: { lunarDate, chineseDate },
       time: t(CHINESE_TIME[timeIndex]),
       timeRange: TIME_RANGE[timeIndex],
-      sign: getSignBySolarDate(solarDate, language),
+      sign: getSignBySolarDate(solarDateStr, language),
       zodiac: getZodiacBySolarDate(solarDate, language),
       earthlyBranchOfSoulPalace: t<EarthlyBranchName>(earthlyBranchOfSoulPalace),
       earthlyBranchOfBodyPalace,
@@ -294,34 +286,28 @@ export function rearrangeAstrolable<T extends FunctionalAstrolabe>({
   astrolable: T;
   option: Option;
 }) {
-  const { timeIndex, fixLeap } = option;
-  const { dayDivide } = getConfig();
-  let tIndex = timeIndex;
-
-  if (dayDivide === 'current' && tIndex >= 12) {
-    // 如果当前时辰为晚子时并且晚子时算当天时，将时辰调整为当日早子时
-    tIndex = 0;
-  }
+  const { timeIndex, fixLeap = true } = option;
+  const { solarDate, timeIndex: tIndex } = normalizeDayBoundary(astrolable.solarDate, timeIndex);
 
   // 以传入地支为命宫
   const { soulIndex, bodyIndex } = getSoulAndBody({
-    solarDate: astrolable.solarDate,
+    solarDate,
     timeIndex: tIndex,
     fixLeap,
     from,
   });
   const fiveElementsClass = getFiveElementsClass(from.heavenlyStem, from.earthlyBranch);
   const palaceNames = getPalaceNames(soulIndex);
-  const majorStars = getMajorStar({ solarDate: astrolable.solarDate, timeIndex: tIndex, fixLeap, from });
+  const majorStars = getMajorStar({ solarDate, timeIndex: tIndex, fixLeap, from });
   const changsheng12 = getchangsheng12({
-    solarDate: astrolable.solarDate,
+    solarDate,
     gender: astrolable.gender as GenderName,
     timeIndex: tIndex,
     fixLeap,
     from,
   });
   const { decadals, ages } = getHoroscope({
-    solarDate: astrolable.solarDate,
+    solarDate,
     timeIndex: tIndex,
     gender: astrolable.gender as GenderName,
     fixLeap,
@@ -387,6 +373,7 @@ export function rearrangeAstrolable<T extends FunctionalAstrolabe>({
   });
 
   astrolable.earthlyBranchOfSoulPalace = t(astrolable.palace('命宫')!.earthlyBranch);
+  astrolable.earthlyBranchOfBodyPalace = t(astrolable.palace('身宫')!.earthlyBranch);
 
   return astrolable;
 }
@@ -516,8 +503,9 @@ export const getMajorStarBySolarDate = (
   validateTimeIndex(timeIndex);
   validateBoolean(fixLeap, 'fixLeap');
   return withLanguage(language ?? 'zh-CN', () => {
-    const { soulIndex } = getSoulAndBody({ solarDate: solarDateStr, timeIndex, fixLeap });
-    const majorStars = getMajorStar({ solarDate: solarDateStr, timeIndex, fixLeap });
+    const param = { ...normalizeDayBoundary(solarDateStr, timeIndex), fixLeap };
+    const { soulIndex } = getSoulAndBody(param);
+    const majorStars = getMajorStar(param);
     const stars = majorStars[soulIndex].filter((star) => star.type === 'major');
 
     if (stars.length) {
