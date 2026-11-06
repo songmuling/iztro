@@ -34,23 +34,28 @@ const resources: { [key: Language]: { translation: { [key: string]: string } } }
 i18next.init({ lng: 'zh-CN', resources });
 
 /**
- * 设置国际化语言。
- * 支持的语言见 type.ts -> Language
+ * 设置全局默认输出语言，初始为 zh-CN。
+ * 排盘及日期辅助方法显式传入的 language 参数优先。
+ * 已有星盘及其后续查询保留生成时的语言。
  *
- * @param language 需要设置的语言【默认为zh-CN】
+ * @param language 需要设置的语言
  */
-export const setLanguage = (language: Language) => {
+export const setLanguage = (language: Language): void => {
   if (!LANGUAGES.includes(language)) throw new Error('invalid language.');
   i18next.changeLanguage(language);
 };
 
 let activeLanguage: Language | undefined;
+
+/** 获取全局默认语言，不受当前同步计算上下文影响。@internal */
+export const getGlobalLanguage = (): Language => i18next.language;
+
 /**
- * 获取当前同步计算或全局设置使用的语言。
+ * 获取当前同步计算使用的语言；在计算上下文之外返回全局语言。
  *
  * @version 2.6.2
  */
-export const getLanguage = (): Language => activeLanguage ?? i18next.language;
+export const getLanguage = (): Language => activeLanguage ?? getGlobalLanguage();
 
 /**
  * 同步计算期间使用指定语言，不改变其他调用的语言。

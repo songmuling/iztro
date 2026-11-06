@@ -7,6 +7,12 @@
 - 🛠️ 修复（fix）
 - 🧹 琐事（Chore）
 
+## v2.6.5（2026.11.05 发布）
+
+- 🪄 功能（feature）
+
+  - 支持通过 `astro.config({ language })` 统一设置后续排盘、日期辅助方法及独立工具函数的默认输出语言，`getConfig()` 返回该配置，`resetConfig()` 恢复为 `zh-CN`。`withOptions({ config: { language } })` 仅覆盖当前星盘，显式 `language` 参数优先；单次调用不修改全局默认值，已有星盘及后续查询保留生成时的语言。保留 `astro.setLanguage()` 作为同一全局语言的设置入口，并通过 `astro.getLanguage()` 读取当前生效语言。
+
 ## v2.6.4（2026.11.02 发布）
 
 - ✨ 改进（enhancement）
